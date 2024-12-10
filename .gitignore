@@ -1,0 +1,4 @@
+push.sh
+.git/
+.DS_Store
+*/.DS_Store
