@@ -1,0 +1,108 @@
+name: Update Rules
+on: 
+  schedule:
+    - cron: '0 */12 * * *'
+  #push:
+  # branches:
+  #  - main
+
+  workflow_dispatch:
+
+  repository_dispatch:
+   type:
+    - [Manual-Update]
+
+jobs:
+  update-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@main
+      - name: Setup Python | 配置Python环境
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Setup Go 1.x | 配置Go环境
+        uses: actions/setup-go@v2
+        with:
+          go-version: "^1.14"
+      - name: Setup Node | 配置Node环境
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+          check-latest: true
+
+      # Install hostlist-compiler
+      - name: Install hostlist-compiler | 安装hostlist-compiler
+        run: npm i -g @adguard/hostlist-compiler
+      - name: Install rename | 安装工具包
+        run: |
+          sudo apt update
+          sudo apt install rename gzip
+
+####################################################
+
+      - name: Git fetch | 获取库资源 
+        run: | 
+          git pull -f
+      - name: Update Rules | 更新规则
+        continue-on-error: false
+        run: |     
+          bash ./script/update-rules.sh
+
+      - name: Update other rules | 更新其它规则及Github-Hosts
+        run: |
+          cd rules
+          rm *.txt
+          wget -O fasthosts.txt https://raw.githubusercontent.com/hacamer/filtering/master/hosts
+
+          rm *.conf
+          bash ../script/github-hosts.sh
+          cd ../
+
+      - name: Update ReadMe | 更新ReadMe
+        run: |
+          bash ./script/clean-readme.sh
+
+      - name: Git push assets to Github | 推送到GitHub-main分支
+        run: |
+          git init
+          git config --local user.name "actions"
+          git config --local user.email "action@github.com"
+          git checkout --orphan clearhistory
+          git commit -am "Update at $(TZ=UTC-8 date +"%Y-%m-%d %H:%M")"
+          git branch -D main
+          git branch -m main
+          git push --force --set-upstream origin main
+#      - name: Git push assets to other repos
+#        continue-on-error: true
+#        run: |
+#          rm -rf .git/
+#          git init          
+#          git config --local user.name "hacamer"
+#          git config --local user.email "hcamer145@gmail.com"
+#          git remote add origin "https://cats-team:${{ secrets.GITLAB_TOKEN }}@gitlab.com/cats-team/adrules.git"
+#          git remote set-url --add origin "https://hacamer:${{ secrets.JIHU_TOKEN }}@jihulab.com/cats-team/adrules.git"
+#          git remote set-url --add origin "https://hacamer:${{ secrets.GITEA_TOKEN }}@gitea.com/Cats-Team/AdRules.git"
+#          git remote set-url --add origin "https://hacamer:${{ secrets.BITBUCKET_TOKEN }}@bitbucket.org/hacamer/adrules.git"
+#          git checkout --orphan clearhistory
+#          git add .
+#          git commit -am "Update at $(TZ=UTC-8 date +"%Y-%m-%d %H:%M")"
+#          git branch -m main
+#          git push --force --set-upstream origin main
+#      - name: Push Message
+#        continue-on-error: true
+#        run: |
+#          pip3 install requests
+#          python3 ./script/pusher.py
+
+#      - name: Auto Built
+#        continue-on-error: true
+#        run: |
+#          curl -X POST "${{ secrets.CF_TOKEN }}"
+      - name: Delete workflow runs | 打扫战场(保留2个Runs)
+        uses: Mattraks/delete-workflow-runs@main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 2
